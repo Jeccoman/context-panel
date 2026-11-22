@@ -1,0 +1,25 @@
+modules:
+  jira:issuePanel:
+    - key: context-panel-issue-panel
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: Context
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+  function:
+    - key: resolver
+      handler: index.handler
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+permissions:
+  scopes:
+    - read:jira-work
+    - read:jira-user
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/09626c2f-80eb-4634-a427-8ed85d46fe25
