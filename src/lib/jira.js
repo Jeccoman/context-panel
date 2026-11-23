@@ -40,18 +40,31 @@ export async function getIssue(issueKey) {
   return normalize(await jiraJson(res));
 }
 
+export async function getComments(issueKey, max = 3) {
+  const res = await api
+    .asUser()
+    .requestJira(route`/rest/api/3/issue/${issueKey}/comment?orderBy=-created&maxResults=${max}`);
+  const data = await jiraJson(res);
+  return (data.comments || []).map((c) => ({
+    author: c.author?.displayName || 'Unknown',
+    createdAt: c.created,
+    text: snippet(adfToText(c.body), 600),
+  }));
+}
+
 export async function searchCandidates(target, max = 50) {
   const words = searchTerms(`${target.summary} ${target.description}`, 6);
   const terms = [...new Set([...words, ...words.flatMap(synonymsFor)])]
     .filter((t) => /^[a-z0-9]+$/.test(t))
     .slice(0, 20);
   const clauses = terms.map((t) => `text ~ "${t}"`);
-  if (target.components.length) {
+  if (target.components.length && target.project) {
     const names = target.components.map((c) => `"${c.replace(/["\\]/g, '')}"`).join(', ');
     clauses.push(`(project = ${target.project} AND component in (${names}) AND statusCategory = Done)`);
   }
   if (clauses.length === 0) return [];
-  const jql = `key != ${target.key} AND (${clauses.join(' OR ')}) ORDER BY updated DESC`;
+  const exclude = target.key === 'NONE-0' ? '' : `key != ${target.key} AND `;
+  const jql = `${exclude}(${clauses.join(' OR ')}) ORDER BY updated DESC`;
   const res = await api.asUser().requestJira(route`/rest/api/3/search/jql`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
@@ -76,7 +89,24 @@ export async function latestComment(issueKey) {
 }
 
 export async function buildContext(issueKey) {
-  const target = await getIssue(issueKey);
+  return buildContextFor(await getIssue(issueKey));
+}
+
+export function targetFromText(text, { project = null, components = [] } = {}) {
+  const clean = (text || '').trim();
+  const [first, ...rest] = clean.split(/(?<=[.!?\n])\s+/);
+  return {
+    key: 'NONE-0',
+    summary: first || clean,
+    description: rest.join(' '),
+    project,
+    components,
+    labels: [],
+  };
+}
+
+export async function buildContextFor(target) {
+  const issueKey = target.key === 'NONE-0' ? null : target.key;
   const candidates = await searchCandidates(target);
   const ranked = rankSimilar(target, candidates, { limit: 15 });
 

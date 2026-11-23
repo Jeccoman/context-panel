@@ -7,12 +7,79 @@ modules:
       render: native
       title: Context
       icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+  rovo:agent:
+    - key: context-agent
+      name: Context
+      description: Finds how your team solved similar problems before, who fixed them, and whether the same work is already in progress.
+      prompt: resource:agent-prompt;agent.md
+      conversationStarters:
+        - Has this been solved before?
+        - Who knows this area?
+        - Is anyone already working on something like this?
+      actions:
+        - find-similar-issues
+        - get-resolution-notes
+        - find-experts
+  rovo:mcp:
+    - key: context-mcp
+      name: Context
+      tools:
+        - find-similar-issues
+        - get-resolution-notes
+        - find-experts
+  action:
+    - key: find-similar-issues
+      name: Find similar issues
+      function: find-similar-fn
+      actionVerb: GET
+      description: Finds past resolved Jira issues similar to an issue or a problem description, with how each ended, open issues that overlap, and the people who resolved related work.
+      inputs:
+        issueKey:
+          title: Issue key
+          type: string
+          required: false
+          description: Jira issue key such as SHOP-12. Leave empty to use the current issue or the problem text.
+        problem:
+          title: Problem description
+          type: string
+          required: false
+          description: The problem in plain words, used when there is no issue key.
+    - key: get-resolution-notes
+      name: Get resolution notes
+      function: resolution-notes-fn
+      actionVerb: GET
+      description: Returns a Jira issue's description, resolution, assignee and latest comments, to explain how a past issue was fixed.
+      inputs:
+        issueKey:
+          title: Issue key
+          type: string
+          required: true
+          description: Jira issue key such as SHOP-12.
+    - key: find-experts
+      name: Find experts
+      function: find-experts-fn
+      actionVerb: GET
+      description: Finds the people who resolved the most issues related to a topic.
+      inputs:
+        topic:
+          title: Topic
+          type: string
+          required: true
+          description: The area or problem, for example "M-Pesa refunds" or "DHL labels".
   function:
     - key: resolver
       handler: index.handler
+    - key: find-similar-fn
+      handler: index.findSimilarIssues
+    - key: resolution-notes-fn
+      handler: index.getResolutionNotes
+    - key: find-experts-fn
+      handler: index.findExperts
 resources:
   - key: main
     path: src/frontend/index.jsx
+  - key: agent-prompt
+    path: prompts
 permissions:
   scopes:
     - read:jira-work
