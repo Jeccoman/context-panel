@@ -1,6 +1,6 @@
 const STOPWORDS = new Set(
   `a about above after again against all also am an and any are as at be because been before being below between both but by can cannot could did do does doing down during each few for from further had has have having he her here hers him his how i if in into is it its itself just me more most my no nor not now of off on once only or other our ours out over own same she should so some such than that the their theirs them then there these they this those through to too under until up very was we were what when where which while who whom why will with would you your yours
-  issue issues bug bugs error errors problem problems please need needs want wants when get gets got make makes made use used using work works working fix fixed fixes add added update updated new old should would could cannot can't doesn't isn't won't does don't`.split(/\s+/)
+  issue issues bug bugs error errors problem problems please need needs want wants when get gets got make makes made use used using work works working fix fixed fixes add added update updated new old should would could cannot can't doesn't isn't won't does don't user users customer customers report reports`.split(/\s+/)
 );
 
 export function adfToText(node) {
@@ -27,6 +27,16 @@ export function tokenize(text) {
     .split(/[^a-z0-9]+/)
     .filter((w) => w.length >= 3 && !STOPWORDS.has(w) && !/^\d+$/.test(w))
     .map(stem);
+}
+
+export function stemDisplayMap(text) {
+  const map = new Map();
+  for (const word of (text || '').toLowerCase().split(/[^a-z0-9]+/)) {
+    if (word.length < 3 || STOPWORDS.has(word) || /^\d+$/.test(word)) continue;
+    const key = stem(word);
+    if (!map.has(key)) map.set(key, word);
+  }
+  return map;
 }
 
 export function searchTerms(text, limit = 6) {

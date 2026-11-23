@@ -1,4 +1,4 @@
-import { tokenize } from './text.js';
+import { stemDisplayMap, tokenize } from './text.js';
 
 function termCounts(tokens) {
   const counts = new Map();
@@ -27,6 +27,7 @@ export function rankSimilar(target, candidates, { limit = 10, minRelevance = 0.1
   const idf = (t) => Math.log(1 + (n + 1) / ((df.get(t) || 0) + 0.5));
   const maxScore = [...queryTerms].reduce((sum, t) => sum + weights.get(t) * idf(t), 0);
 
+  const display = stemDisplayMap(`${target.summary} ${target.description}`);
   const targetComponents = new Set(target.components || []);
   const targetLabels = new Set(target.labels || []);
 
@@ -47,7 +48,7 @@ export function rankSimilar(target, candidates, { limit = 10, minRelevance = 0.1
       if (sharedComponents.length) match += 0.1;
       if (sharedLabels.length) match += 0.05;
       if (issue.project && issue.project === target.project) match += 0.05;
-      return { ...issue, relevance, match: Math.min(1, match), sharedTerms: shared, sharedComponents };
+      return { ...issue, relevance, match: Math.min(1, match), sharedTerms: shared.map((t) => display.get(t) || t), sharedComponents };
     })
     .filter((r) => r.relevance >= minRelevance)
     .sort((a, b) => b.match - a.match)
