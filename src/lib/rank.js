@@ -1,4 +1,5 @@
 import { stemDisplayMap, tokenize } from './text.js';
+import { analyzeConcepts } from './concepts.js';
 
 function termCounts(tokens) {
   const counts = new Map();
@@ -6,15 +7,26 @@ function termCounts(tokens) {
   return counts;
 }
 
+function textTokens(text) {
+  const { concepts, covered } = analyzeConcepts(text);
+  const coveredStems = new Set(tokenize([...covered].join(' ')));
+  return [...tokenize(text).filter((t) => !coveredStems.has(t)), ...concepts];
+}
+
 function issueTokens(issue) {
-  const summary = tokenize(issue.summary);
-  return [...summary, ...summary, ...tokenize(issue.description)];
+  const summary = textTokens(issue.summary);
+  return [...summary, ...summary, ...textTokens(issue.description)];
+}
+
+function displayTerm(token, display) {
+  if (token.startsWith('~')) return token.slice(1).replace(/_/g, ' ');
+  return display.get(token) || token;
 }
 
 export function rankSimilar(target, candidates, { limit = 10, minRelevance = 0.15 } = {}) {
   const weights = new Map();
-  for (const t of tokenize(target.description)) weights.set(t, 1);
-  for (const t of tokenize(target.summary)) weights.set(t, 3);
+  for (const t of textTokens(target.description)) weights.set(t, 1);
+  for (const t of textTokens(target.summary)) weights.set(t, 3);
   const queryTerms = new Set(weights.keys());
   if (queryTerms.size === 0 || candidates.length === 0) return [];
 
@@ -48,7 +60,7 @@ export function rankSimilar(target, candidates, { limit = 10, minRelevance = 0.1
       if (sharedComponents.length) match += 0.1;
       if (sharedLabels.length) match += 0.05;
       if (issue.project && issue.project === target.project) match += 0.05;
-      return { ...issue, relevance, match: Math.min(1, match), sharedTerms: shared.map((t) => display.get(t) || t), sharedComponents };
+      return { ...issue, relevance, match: Math.min(1, match), sharedTerms: [...new Set(shared.map((t) => displayTerm(t, display)))], sharedComponents };
     })
     .filter((r) => r.relevance >= minRelevance)
     .sort((a, b) => b.match - a.match)

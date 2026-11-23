@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { rankSimilar } from '../src/lib/rank.js';
 import { searchTerms, tokenize } from '../src/lib/text.js';
+import { conceptTokens, synonymsFor } from '../src/lib/concepts.js';
 
 const issues = JSON.parse(readFileSync(new URL('../data/issues.json', import.meta.url)));
-const queries = JSON.parse(readFileSync(new URL('../data/queries.json', import.meta.url)));
+const set = process.argv.find((a) => a.startsWith('--set='))?.slice(6) || 'queries';
+const noComponent = process.argv.includes('--no-component');
+const queries = JSON.parse(readFileSync(new URL(`../data/${set}.json`, import.meta.url)));
 const verbose = process.argv.includes('--verbose');
 
 const corpus = issues.map((i) => ({
@@ -18,13 +21,20 @@ const corpus = issues.map((i) => ({
 }));
 
 function prefilter(target) {
-  const terms = new Set(searchTerms(`${target.summary} ${target.description}`, 6).flatMap(tokenize));
-  return corpus.filter((c) => tokenize(`${c.summary} ${c.description}`).some((t) => terms.has(t)));
+  const words = searchTerms(`${target.summary} ${target.description}`, 6);
+  const expanded = [...words, ...words.flatMap(synonymsFor), ...conceptTokens(`${target.summary} ${target.description}`)];
+  const terms = new Set(expanded.flatMap((w) => (w.startsWith('~') ? [w] : tokenize(w))));
+  const sameComponent = new Set(target.components);
+  return corpus.filter((c) => {
+    if (c.statusCategory === 'done' && c.components.some((x) => sameComponent.has(x))) return true;
+    const text = `${c.summary} ${c.description}`;
+    return [...tokenize(text), ...conceptTokens(text)].some((t) => terms.has(t));
+  });
 }
 
 let hit1 = 0, hit3 = 0, rr = 0;
 for (const q of queries) {
-  const target = { key: 'NEW-1', ...q, components: [q.component], labels: [], project: 'SHOP' };
+  const target = { key: 'NEW-1', ...q, components: noComponent ? [] : [q.component], labels: [], project: 'SHOP' };
   const ranked = rankSimilar(target, prefilter(target), { limit: 15 })
     .filter((r) => r.statusCategory === 'done' && r.resolution !== 'Duplicate');
   const keys = ranked.map((r) => r.key);
@@ -35,4 +45,4 @@ for (const q of queries) {
   if (verbose || rank !== 1) console.log(`${rank === 1 ? 'ok  ' : 'MISS'} rank=${rank || '-'} "${q.summary}" -> ${keys.slice(0, 3).join(', ') || '(none)'}`);
 }
 const n = queries.length;
-console.log(`\nqueries=${n}  top1=${(100 * hit1 / n).toFixed(1)}%  top3=${(100 * hit3 / n).toFixed(1)}%  MRR=${(rr / n).toFixed(3)}`);
+console.log(`\nset=${set}${noComponent ? ' (no component)' : ''} queries=${n}  top1=${(100 * hit1 / n).toFixed(1)}%  top3=${(100 * hit3 / n).toFixed(1)}%  MRR=${(rr / n).toFixed(3)}`);

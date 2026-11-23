@@ -1,6 +1,7 @@
 import api, { route } from '@forge/api';
 import { adfToText, searchTerms, snippet } from './text.js';
 import { rankSimilar, topPeople } from './rank.js';
+import { synonymsFor } from './concepts.js';
 
 const FIELDS = ['summary', 'description', 'status', 'resolution', 'resolutiondate', 'assignee', 'components', 'labels', 'project', 'updated'];
 
@@ -40,10 +41,17 @@ export async function getIssue(issueKey) {
 }
 
 export async function searchCandidates(target, max = 50) {
-  const terms = searchTerms(`${target.summary} ${target.description}`, 6);
-  if (terms.length === 0) return [];
-  const textClause = terms.map((t) => `text ~ "${t}"`).join(' OR ');
-  const jql = `key != ${target.key} AND (${textClause}) ORDER BY updated DESC`;
+  const words = searchTerms(`${target.summary} ${target.description}`, 6);
+  const terms = [...new Set([...words, ...words.flatMap(synonymsFor)])]
+    .filter((t) => /^[a-z0-9]+$/.test(t))
+    .slice(0, 20);
+  const clauses = terms.map((t) => `text ~ "${t}"`);
+  if (target.components.length) {
+    const names = target.components.map((c) => `"${c.replace(/["\\]/g, '')}"`).join(', ');
+    clauses.push(`(project = ${target.project} AND component in (${names}) AND statusCategory = Done)`);
+  }
+  if (clauses.length === 0) return [];
+  const jql = `key != ${target.key} AND (${clauses.join(' OR ')}) ORDER BY updated DESC`;
   const res = await api.asUser().requestJira(route`/rest/api/3/search/jql`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
