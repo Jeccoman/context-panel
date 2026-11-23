@@ -41,7 +41,7 @@ Run it yourself:
 
 ```bash
 node eval/run.mjs --set=queries-test --verbose
-node --test test/
+node --test test/rank.test.mjs
 ```
 
 ## Modules
